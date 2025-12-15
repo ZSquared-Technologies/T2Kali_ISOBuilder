@@ -11,7 +11,7 @@ It removes the complexity of command-line flags and configuration files. You sim
 * **Variant Menu:** Simple selection menu for XFCE, Purple, GNOME, KDE, and more.
 
 ## Prerequisites
-* **OS:** A Debian-based system (Kali Linux recommended).
+* **OS:** A Kali System / Live Enviroment.
 * **Space:** ~25GB of free disk space.
 * **Privileges:** Root access (`sudo`).
 
@@ -29,3 +29,12 @@ Simply run the script with sudo. There are no arguments needed.
 
 ```bash
 sudo ./t2_kali-builder.sh
+```
+
+## Troubleshooting
+
+Build Fails: Check the live-build.log in the directory.
+
+Repo Errors: If your custom repo fails (404), ensure you typed the deb line correctly. For flat repos (like Floorp), ensure you end the URL with ./.
+
+T2 Drivers: The script hard-codes a priority pin at /etc/apt/preferences.d/99-t2-repo to ensure the T2 kernel is always preferred.
