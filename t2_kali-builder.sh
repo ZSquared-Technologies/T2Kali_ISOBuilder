@@ -19,7 +19,7 @@ RED='\033[0;31m'
 NC='\033[0m' # No Color
 
 # Check for Root
-if [ "$EUID" -ne 0 ]; then
+if [ "$EUID" -ne 0 ]; then 
     echo -e "${RED}Please run as root (sudo).${NC}"
     exit 1
 fi
@@ -93,11 +93,11 @@ count=0
 while [[ "$repo_choice" =~ ^[Yy]$ ]]; do
     count=$((count+1))
     echo -e "${BLUE}--- Adding Custom Repo #$count ---${NC}"
-
+    
     # Get the repo line
     echo "Enter the full 'deb' line (e.g., deb https://ppa.ablaze.one/ ./):"
     read -r REPO_LINE
-
+    
     # Get the key URL
     echo "Enter the URL to the GPG Key (e.g., https://ppa.ablaze.one/KEY.gpg):"
     read -r KEY_URL
@@ -121,4 +121,81 @@ while [[ "$repo_choice" =~ ^[Yy]$ ]]; do
     fi
 
     if [ ! -z "$PKG_NAMES" ]; then
-        echo "$PKG_NAMES" >> "kali-config/common/package-lists/custom-apps.list.chroot
+        echo "$PKG_NAMES" >> "kali-config/common/package-lists/custom-apps.list.chroot"
+        echo -e "${GREEN}   -> Packages queued: $PKG_NAMES${NC}"
+    fi
+
+    echo ""
+    read -p "Add another repository? [y/N]: " repo_choice
+done
+echo ""
+
+# ==============================================================================
+# 4. INTERACTIVE VARIANT WIZARD
+# ==============================================================================
+echo -e "${GREEN}>>> Desktop Variant Selection${NC}"
+echo "Which Kali Desktop environment do you want to build?"
+echo ""
+
+# Define the options manually for better display control
+PS3="Enter the number of your choice: "
+options=("xfce (Standard Kali)" "purple (Defensive Security)" "gnome" "kde" "mate" "lxde" "i3" "e17")
+
+select opt in "${options[@]}"; do
+    case $opt in
+        "xfce (Standard Kali)")
+            VARIANT="xfce"
+            break
+            ;;
+        "purple (Defensive Security)")
+            VARIANT="purple"
+            break
+            ;;
+        "gnome")
+            VARIANT="gnome"
+            break
+            ;;
+        "kde")
+            VARIANT="kde"
+            break
+            ;;
+        "mate")
+            VARIANT="mate"
+            break
+            ;;
+        "lxde")
+            VARIANT="lxde"
+            break
+            ;;
+        "i3")
+            VARIANT="i3"
+            break
+            ;;
+        "e17")
+            VARIANT="e17"
+            break
+            ;;
+        *) 
+            echo "Invalid option $REPLY. Please try again." 
+            ;;
+    esac
+done
+
+echo ""
+echo -e "${GREEN}>>> Configuration Complete!${NC}"
+echo -e "    Variant: $VARIANT"
+echo -e "    T2 Support: Enabled"
+echo -e "    Custom Repos: $count"
+echo ""
+
+read -p "Press [Enter] to start the build process..."
+
+# ==============================================================================
+# 5. BUILD EXECUTION
+# ==============================================================================
+echo -e "${GREEN}>>> Starting Build Process...${NC}"
+echo -e "${GREEN}>>> This will take a long time (30m - 2h depending on internet/CPU).${NC}"
+
+./build.sh --variant "$VARIANT" --verbose
+
+echo -e "${GREEN}>>> Build Complete! Check the 'images/' directory.${NC}"
