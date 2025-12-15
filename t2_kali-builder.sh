@@ -1,6 +1,6 @@
 #!/bin/bash
 # t2_kali-builder.sh - Automates building a custom Kali ISO for T2 Macs
-# Updated: Removed 'simple-cdd-profiles' dependency; Fixed T2 Repo logic.
+# Updated: Added 'mkdir -p' to prevent "No such file or directory" errors.
 
 set -e # Exit immediately if a command exits with a non-zero status
 
@@ -17,7 +17,6 @@ if [ "$EUID" -ne 0 ]; then
 fi
 
 echo -e "${BLUE}[*] Installing dependencies (git, live-build, curl)...${NC}"
-# Removed 'simple-cdd-profiles' which was causing the 404 error
 apt-get update -qq
 apt-get install -y git live-build curl ca-certificates gnupg dirmngr
 
@@ -35,22 +34,24 @@ cd "$WORK_DIR"
 # 3. MANDATORY T2 CONFIGURATION (KERNEL + DRIVERS)
 echo -e "${GREEN}[+] Configuring MANDATORY T2 Repositories...${NC}"
 
+# !!! FIX: Ensure the directories exist before downloading !!!
+mkdir -p kali-config/common/archives/
+mkdir -p kali-config/common/package-lists/
+mkdir -p kali-config/common/includes.chroot/etc/apt/preferences.d/
+
 # A. Add T2 GPG Key (Used by both repos)
 curl -L "https://adityagarg8.github.io/t2-ubuntu-repo/KEY.gpg" -o kali-config/common/archives/t2.key.chroot
 cp kali-config/common/archives/t2.key.chroot kali-config/common/archives/t2.key.binary
 
 # B. Add "Common" Repository (Fans, Touchbar tools)
-# This provides 't2fanrd', 'tiny-dfr', etc.
 curl -L "https://adityagarg8.github.io/t2-ubuntu-repo/t2.list" -o kali-config/common/archives/t2-common.list.chroot
 cp kali-config/common/archives/t2-common.list.chroot kali-config/common/archives/t2-common.list.binary
 
 # C. Add "Release Specific" Repository (The Kernel)
-# We use the 'testing' alias to ensure compatibility with Kali Rolling
 echo "deb [signed-by=/etc/apt/trusted.gpg.d/t2-ubuntu-repo.gpg] https://github.com/AdityaGarg8/t2-ubuntu-repo/releases/download/testing ./" > kali-config/common/archives/t2-release.list.chroot
 cp kali-config/common/archives/t2-release.list.chroot kali-config/common/archives/t2-release.list.binary
 
-# D. Add APT Pinning (Hook) to prefer T2 Kernel over Kali Kernel
-mkdir -p kali-config/common/includes.chroot/etc/apt/preferences.d/
+# D. Add APT Pinning (Hook)
 cat <<EOF > kali-config/common/includes.chroot/etc/apt/preferences.d/99-t2-repo
 Package: *
 Pin: origin github.com
@@ -124,4 +125,20 @@ echo "5) i3 (Tiling/Minimal)"
 read -p "Enter number [1]: " VARIANT_NUM
 
 case $VARIANT_NUM in
-    2) VARIANT="
+    2) VARIANT="purple" ;;
+    3) VARIANT="gnome" ;;
+    4) VARIANT="kde" ;;
+    5) VARIANT="i3" ;;
+    *) VARIANT="xfce" ;;
+esac
+
+# 6. BUILD PROCESS
+echo -e "${GREEN}[*] Starting Build Process for Kali ($VARIANT)...${NC}"
+echo "    This will take a significant amount of time."
+echo "    Log file: $WORK_DIR/build.log"
+
+# Run the official build command
+lb config -a amd64 --distribution kali-rolling -- --variant "$VARIANT"
+lb build
+
+echo -e "${GREEN}[SUCCESS] Build Complete! Check the 'images/' directory.${NC}"
