@@ -1,6 +1,6 @@
 #!/bin/bash
 # t2_kali-builder.sh - Automates building a custom Kali ISO for T2 Macs
-# Updated: Adds 'Common' T2 Repo (Fans/Touchbar) + 'Release' T2 Repo (Kernel)
+# Updated: Removed 'simple-cdd-profiles' dependency; Fixed T2 Repo logic.
 
 set -e # Exit immediately if a command exits with a non-zero status
 
@@ -17,8 +17,9 @@ if [ "$EUID" -ne 0 ]; then
 fi
 
 echo -e "${BLUE}[*] Installing dependencies (git, live-build, curl)...${NC}"
+# Removed 'simple-cdd-profiles' which was causing the 404 error
 apt-get update -qq
-apt-get install -y git live-build simple-cdd-profiles curl ca-certificates gnupg dirmngr
+apt-get install -y git live-build curl ca-certificates gnupg dirmngr
 
 # 2. PREPARE BUILD DIRECTORY
 WORK_DIR="live-build-config"
@@ -123,20 +124,4 @@ echo "5) i3 (Tiling/Minimal)"
 read -p "Enter number [1]: " VARIANT_NUM
 
 case $VARIANT_NUM in
-    2) VARIANT="purple" ;;
-    3) VARIANT="gnome" ;;
-    4) VARIANT="kde" ;;
-    5) VARIANT="i3" ;;
-    *) VARIANT="xfce" ;;
-esac
-
-# 6. BUILD PROCESS
-echo -e "${GREEN}[*] Starting Build Process for Kali ($VARIANT)...${NC}"
-echo "    This will take a significant amount of time."
-echo "    Log file: $WORK_DIR/build.log"
-
-# Run the official build command
-lb config -a amd64 --distribution kali-rolling -- --variant "$VARIANT"
-lb build
-
-echo -e "${GREEN}[SUCCESS] Build Complete! Check the 'images/' directory.${NC}"
+    2) VARIANT="
