@@ -1,68 +1,55 @@
 #!/bin/bash
-
-# ==============================================================================
-# SCRIPT: t2_kali-builder
-# DESCRIPTION: A fully interactive wizard to build custom Kali Linux Live ISOs
-#              with mandatory T2 Mac support.
-# ==============================================================================
+# t2_kali-builder.sh - Automates building a custom Kali ISO for T2 Macs
+# Updated: Adds 'Common' T2 Repo (Fans/Touchbar) + 'Release' T2 Repo (Kernel)
 
 set -e # Exit immediately if a command exits with a non-zero status
 
-# Default Variables
-BUILD_DIR="live-build-config"
-VARIANT=""
-
-# Colors for pretty output
+# COLORS
 GREEN='\033[0;32m'
 BLUE='\033[0;34m'
 RED='\033[0;31m'
 NC='\033[0m' # No Color
 
-# Check for Root
-if [ "$EUID" -ne 0 ]; then 
-    echo -e "${RED}Please run as root (sudo).${NC}"
-    exit 1
+# 1. PRE-FLIGHT CHECKS
+if [ "$EUID" -ne 0 ]; then
+  echo -e "${RED}[!] Please run as root (sudo ./t2_kali-builder.sh)${NC}"
+  exit 1
 fi
 
-# ==============================================================================
-# 1. WELCOME & DEPENDENCIES
-# ==============================================================================
-clear
-echo -e "${GREEN}==============================================${NC}"
-echo -e "${GREEN}       Kali Linux T2 ISO Builder Wizard       ${NC}"
-echo -e "${GREEN}==============================================${NC}"
-echo ""
-echo -e "${BLUE}[+] Installing build dependencies...${NC}"
-apt update && apt install -y git live-build simple-cdd cdebootstrap curl
+echo -e "${BLUE}[*] Installing dependencies (git, live-build, curl)...${NC}"
+apt-get update -qq
+apt-get install -y git live-build simple-cdd-profiles curl ca-certificates gnupg dirmngr
 
-if [ -d "$BUILD_DIR" ]; then
-    echo -e "${BLUE}[+] Cleaning up existing build directory...${NC}"
-    rm -rf "$BUILD_DIR"
+# 2. PREPARE BUILD DIRECTORY
+WORK_DIR="live-build-config"
+if [ -d "$WORK_DIR" ]; then
+    echo -e "${BLUE}[!] Directory $WORK_DIR exists. Backing up...${NC}"
+    mv "$WORK_DIR" "${WORK_DIR}_backup_$(date +%s)"
 fi
 
-echo -e "${BLUE}[+] Cloning live-build-config...${NC}"
-git clone https://gitlab.com/kalilinux/build-scripts/live-build-config.git "$BUILD_DIR"
-cd "$BUILD_DIR"
+echo -e "${BLUE}[*] Cloning official Kali live-build config...${NC}"
+git clone https://gitlab.com/kalilinux/build-scripts/live-build-config.git "$WORK_DIR"
+cd "$WORK_DIR"
 
-# Create common directory structure
-mkdir -p kali-config/common/archives
-mkdir -p kali-config/common/package-lists
-mkdir -p kali-config/common/includes.chroot/etc/apt/preferences.d/
+# 3. MANDATORY T2 CONFIGURATION (KERNEL + DRIVERS)
+echo -e "${GREEN}[+] Configuring MANDATORY T2 Repositories...${NC}"
 
-# ==============================================================================
-# 2. MANDATORY T2 CONFIGURATION
-# ==============================================================================
-echo -e "${BLUE}[+] Configuring MANDATORY T2 Repository & Hooks...${NC}"
-
-# A. Add Repository (Rolling/Testing)
-echo "deb [signed-by=/etc/apt/trusted.gpg.d/t2-ubuntu-repo.gpg] https://github.com/AdityaGarg8/t2-ubuntu-repo/releases/download/testing ./" > kali-config/common/archives/t2.list.chroot
-cp kali-config/common/archives/t2.list.chroot kali-config/common/archives/t2.list.binary
-
-# B. Add Key
+# A. Add T2 GPG Key (Used by both repos)
 curl -L "https://adityagarg8.github.io/t2-ubuntu-repo/KEY.gpg" -o kali-config/common/archives/t2.key.chroot
 cp kali-config/common/archives/t2.key.chroot kali-config/common/archives/t2.key.binary
 
-# C. Add APT Pinning (Hook)
+# B. Add "Common" Repository (Fans, Touchbar tools)
+# This provides 't2fanrd', 'tiny-dfr', etc.
+curl -L "https://adityagarg8.github.io/t2-ubuntu-repo/t2.list" -o kali-config/common/archives/t2-common.list.chroot
+cp kali-config/common/archives/t2-common.list.chroot kali-config/common/archives/t2-common.list.binary
+
+# C. Add "Release Specific" Repository (The Kernel)
+# We use the 'testing' alias to ensure compatibility with Kali Rolling
+echo "deb [signed-by=/etc/apt/trusted.gpg.d/t2-ubuntu-repo.gpg] https://github.com/AdityaGarg8/t2-ubuntu-repo/releases/download/testing ./" > kali-config/common/archives/t2-release.list.chroot
+cp kali-config/common/archives/t2-release.list.chroot kali-config/common/archives/t2-release.list.binary
+
+# D. Add APT Pinning (Hook) to prefer T2 Kernel over Kali Kernel
+mkdir -p kali-config/common/includes.chroot/etc/apt/preferences.d/
 cat <<EOF > kali-config/common/includes.chroot/etc/apt/preferences.d/99-t2-repo
 Package: *
 Pin: origin github.com
@@ -73,129 +60,83 @@ Pin: release o=Aditya Garg
 Pin-Priority: 1001
 EOF
 
-# D. Add T2 Packages
+# E. Add T2 Packages to Install List
 cat <<EOF > kali-config/common/package-lists/t2-support.list.chroot
 linux-t2
 apple-t2-audio-config
+tiny-dfr
+t2fanrd
 EOF
 
-echo -e "${GREEN}   -> T2 Support Configured.${NC}"
-echo ""
+# 4. CUSTOM REPO WIZARD (Floorp, VSCode, etc.)
+echo -e "${BLUE}>>> Custom Repository Wizard${NC}"
+read -p "Would you like to add any extra repositories (e.g., Floorp, VSCode)? [y/N]: " ADD_REPO
+if [[ "$ADD_REPO" =~ ^[Yy]$ ]]; then
+    REPO_COUNT=1
+    while true; do
+        echo ""
+        echo -e "${GREEN}--- Adding Custom Repo #$REPO_COUNT ---${NC}"
+        
+        echo "Enter the full 'deb' line:" 
+        echo "(Example: deb https://ppa.floorp.app/amd64/ ./)"
+        read -r REPO_LINE
+        
+        echo "Enter the URL to the GPG Key:"
+        read -r REPO_KEY
+        
+        echo "Enter any package names to install from this repo (space separated):"
+        read -r REPO_PKGS
 
-# ==============================================================================
-# 3. INTERACTIVE REPOSITORY WIZARD
-# ==============================================================================
-echo -e "${GREEN}>>> Custom Repository Wizard${NC}"
-echo "Would you like to add any extra repositories (e.g., Floorp, VSCode)?"
-read -p "Make selection [y/N]: " repo_choice
+        # Clean inputs
+        SAFE_NAME="custom_repo_${REPO_COUNT}"
+        
+        # Write List File
+        echo "$REPO_LINE" > "kali-config/common/archives/${SAFE_NAME}.list.chroot"
+        cp "kali-config/common/archives/${SAFE_NAME}.list.chroot" "kali-config/common/archives/${SAFE_NAME}.list.binary"
+        
+        # Download Key
+        curl -L "$REPO_KEY" -o "kali-config/common/archives/${SAFE_NAME}.key.chroot"
+        cp "kali-config/common/archives/${SAFE_NAME}.key.chroot" "kali-config/common/archives/${SAFE_NAME}.key.binary"
 
-count=0
-while [[ "$repo_choice" =~ ^[Yy]$ ]]; do
-    count=$((count+1))
-    echo -e "${BLUE}--- Adding Custom Repo #$count ---${NC}"
-    
-    # Get the repo line
-    echo "Enter the full 'deb' line (e.g., deb https://ppa.ablaze.one/ ./):"
-    read -r REPO_LINE
-    
-    # Get the key URL
-    echo "Enter the URL to the GPG Key (e.g., https://ppa.ablaze.one/KEY.gpg):"
-    read -r KEY_URL
+        # Add Packages to List
+        if [ ! -z "$REPO_PKGS" ]; then
+            echo "$REPO_PKGS" >> "kali-config/common/package-lists/custom.list.chroot"
+        fi
 
-    # Get specific packages
-    echo "Enter any package names to install from this repo (space separated):"
-    echo "(Leave blank if you just want the repo added but no specific install)"
-    read -r PKG_NAMES
-
-    # Write Configs
-    if [ ! -z "$REPO_LINE" ]; then
-        echo "$REPO_LINE" > "kali-config/common/archives/custom-$count.list.chroot"
-        cp "kali-config/common/archives/custom-$count.list.chroot" "kali-config/common/archives/custom-$count.list.binary"
         echo -e "${GREEN}   -> Repo added.${NC}"
-    fi
-
-    if [ ! -z "$KEY_URL" ]; then
-        curl -L "$KEY_URL" -o "kali-config/common/archives/custom-$count.key.chroot"
-        cp "kali-config/common/archives/custom-$count.key.chroot" "kali-config/common/archives/custom-$count.key.binary"
-        echo -e "${GREEN}   -> Key downloaded.${NC}"
-    fi
-
-    if [ ! -z "$PKG_NAMES" ]; then
-        echo "$PKG_NAMES" >> "kali-config/common/package-lists/custom-apps.list.chroot"
-        echo -e "${GREEN}   -> Packages queued: $PKG_NAMES${NC}"
-    fi
-
-    echo ""
-    read -p "Add another repository? [y/N]: " repo_choice
-done
-echo ""
-
-# ==============================================================================
-# 4. INTERACTIVE VARIANT WIZARD
-# ==============================================================================
-echo -e "${GREEN}>>> Desktop Variant Selection${NC}"
-echo "Which Kali Desktop environment do you want to build?"
-echo ""
-
-# Define the options manually for better display control
-PS3="Enter the number of your choice: "
-options=("xfce (Standard Kali)" "purple (Defensive Security)" "gnome" "kde" "mate" "lxde" "i3" "e17")
-
-select opt in "${options[@]}"; do
-    case $opt in
-        "xfce (Standard Kali)")
-            VARIANT="xfce"
+        
+        read -p "Add another repository? [y/N]: " CONT
+        if [[ ! "$CONT" =~ ^[Yy]$ ]]; then
             break
-            ;;
-        "purple (Defensive Security)")
-            VARIANT="purple"
-            break
-            ;;
-        "gnome")
-            VARIANT="gnome"
-            break
-            ;;
-        "kde")
-            VARIANT="kde"
-            break
-            ;;
-        "mate")
-            VARIANT="mate"
-            break
-            ;;
-        "lxde")
-            VARIANT="lxde"
-            break
-            ;;
-        "i3")
-            VARIANT="i3"
-            break
-            ;;
-        "e17")
-            VARIANT="e17"
-            break
-            ;;
-        *) 
-            echo "Invalid option $REPLY. Please try again." 
-            ;;
-    esac
-done
+        fi
+        ((REPO_COUNT++))
+    done
+fi
 
-echo ""
-echo -e "${GREEN}>>> Configuration Complete!${NC}"
-echo -e "    Variant: $VARIANT"
-echo -e "    T2 Support: Enabled"
-echo -e "    Custom Repos: $count"
-echo ""
+# 5. VARIANT SELECTION
+echo -e "${BLUE}>>> Select Desktop Environment${NC}"
+echo "1) XFCE (Recommended/Lightweight)"
+echo "2) Purple (Defensive Security)"
+echo "3) GNOME (Modern/Touch)"
+echo "4) KDE (Customizable)"
+echo "5) i3 (Tiling/Minimal)"
+read -p "Enter number [1]: " VARIANT_NUM
 
-read -p "Press [Enter] to start the build process..."
+case $VARIANT_NUM in
+    2) VARIANT="purple" ;;
+    3) VARIANT="gnome" ;;
+    4) VARIANT="kde" ;;
+    5) VARIANT="i3" ;;
+    *) VARIANT="xfce" ;;
+esac
 
-# ==============================================================================
-# 5. BUILD EXECUTION
-# ==============================================================================
-echo -e "${GREEN}>>> Starting Build Process...${NC}"
-echo -e "${GREEN}>>> This will take a long time (30m - 2h depending on internet/CPU).${NC}"
+# 6. BUILD PROCESS
+echo -e "${GREEN}[*] Starting Build Process for Kali ($VARIANT)...${NC}"
+echo "    This will take a significant amount of time."
+echo "    Log file: $WORK_DIR/build.log"
 
-./build.sh --variant "$VARIANT" --verbose
+# Run the official build command
+lb config -a amd64 --distribution kali-rolling -- --variant "$VARIANT"
+lb build
 
-echo -e "${GREEN}>>> Build Complete! Check the 'images/' directory.${NC}"
+echo -e "${GREEN}[SUCCESS] Build Complete! Check the 'images/' directory.${NC}"
