@@ -15,13 +15,13 @@ A bash automation script to build custom "Rolling" Kali Linux Live ISOs with **m
 
 ## Installation
 
-1.  Save the script to your computer (e.g., `build_t2_kali.sh`).
+1.  Save the script to your computer (e.g., `t2_kali-builder.sh.sh`).
 2.  Make the script executable:
 
 <!-- end list -->
 
 ```bash
-chmod +x build_t2_kali.sh
+chmod +x t2_kali-builder.sh.sh
 ```
 
 ## Usage
@@ -29,7 +29,7 @@ chmod +x build_t2_kali.sh
 Run the script with `sudo`. You can run it interactively or use flags for automation.
 
 ```bash
-sudo ./build_t2_kali.sh [OPTIONS]
+sudo ./t2_kali-builder.sh.sh [OPTIONS]
 ```
 
 ### Options
@@ -49,13 +49,13 @@ sudo ./build_t2_kali.sh [OPTIONS]
 This will install T2 drivers and prompt you to select a desktop environment from a menu.
 
 ```bash
-sudo ./build_t2_kali.sh
+sudo ./t2_kali-builder.sh.sh
 ```
 
 ### 2\. Build Standard Kali (XFCE) with T2 Support
 
 ```bash
-sudo ./build_t2_kali.sh --variant xfce
+sudo ./t2_kali-builder.sh.sh --variant xfce
 ```
 
 ### 3\. The "Full Package" (T2 + Floorp Browser)
@@ -65,7 +65,7 @@ This command builds the ISO with T2 drivers AND adds the Floorp browser reposito
 **Note:** The script automatically detects "floorp" in the URL and adds the package to the install list.
 
 ```bash
-sudo ./build_t2_kali.sh \
+sudo ./t2_kali-builder.sh.sh \
   --variant xfce \
   --repo "deb [signed-by=/etc/apt/trusted.gpg.d/custom-1.gpg] https://ppa.ablaze.one/ ./|https://ppa.ablaze.one/KEY.gpg"
 ```
